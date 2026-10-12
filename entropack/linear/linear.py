@@ -7,7 +7,7 @@ from torch.nn import functional as F
 
 from ..compression import CompressedTensor, compress, decompress
 from ..registry import default_config as _default_config, get_scheme, name_for_config, require_dtype
-from ..schemes import LatticeRANSConfig, RawConfig
+from ..schemes import EntroPackLossyConfig, RawConfig
 from .utils import capability_of, load_quant_kernels, pad, round_up
 
 _EPS = torch.finfo(torch.float32).eps
@@ -282,10 +282,10 @@ class QuantizedLinear(CompressedLinear):
             return RawConfig()
         if isinstance(config, RawConfig):
             return config
-        if not isinstance(config, LatticeRANSConfig):
+        if not isinstance(config, EntroPackLossyConfig):
             raise TypeError(
                 f"{cls.__name__} stores {cls.code_dtype} codes: either uncoded (RawConfig) or lattice-coded "
-                f"(LatticeRANSConfig), got {type(config).__name__}"
+                f"(EntroPackLossyConfig), got {type(config).__name__}"
             )
         rate = config.target_bpp
         if isinstance(rate, bool) or not isinstance(rate, Real) or not 0.0 < float(rate) < 8.0:
@@ -389,7 +389,7 @@ class CompressedFP8Linear(QuantizedLinear):
 
     Requires CUDA compute capability 8.9 or later and uses ``torch._scaled_mm``.
     With no compression configuration, quantized codes are stored directly.
-    :class:`~entropack.LatticeRANSConfig` additionally compresses them at targets from 0.001 up
+    :class:`~entropack.EntroPackLossyConfig` additionally compresses them at targets from 0.001 up
     to, but excluding, 8 bits per parameter. Inference decodes the FP8 codes before matrix
     multiplication. Stored size also includes metadata and per-row weight scales.
     """
@@ -416,7 +416,7 @@ class CompressedINT8Linear(QuantizedLinear):
 
     Requires CUDA compute capability 8.0 or later. Matrix multiplication uses Triton when
     available and ``torch._int_mm`` otherwise. With no compression configuration,
-    quantized codes are stored directly. :class:`~entropack.LatticeRANSConfig` additionally compresses
+    quantized codes are stored directly. :class:`~entropack.EntroPackLossyConfig` additionally compresses
     them at targets from 0.001 up to, but excluding, 8 bits per parameter. Stored size also
     includes metadata and per-row weight scales.
     """

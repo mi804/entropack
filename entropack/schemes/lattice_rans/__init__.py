@@ -3,11 +3,11 @@ import torch
 from ..base import Scheme, packed_buffers, register_scheme
 from ..checks import prepare_weight
 from .format import (
-    LATTICE_DIM, PACKED_KEYS, SUPPORTED_DTYPES, LatticeBuffers, LatticeRANSConfig, recommended_tile_elements,
+    LATTICE_DIM, PACKED_KEYS, SUPPORTED_DTYPES, LatticeBuffers, EntroPackLossyConfig, LatticeRANSConfig, recommended_tile_elements,
     validate_packed,
 )
 
-__all__ = ["LatticeRANSScheme", "LatticeRANSConfig"]
+__all__ = ["EntroPackLossyConfig", "LatticeRANSConfig", "LatticeRANSScheme"]
 
 
 class LatticeRANSScheme(Scheme):
@@ -18,7 +18,7 @@ class LatticeRANSScheme(Scheme):
     dtypes = SUPPORTED_DTYPES
     lanes = {"eager": "eager", "cuda": "cuda"}
 
-    def encode(self, weight: torch.Tensor, config: LatticeRANSConfig) -> dict:
+    def encode(self, weight: torch.Tensor, config: EntroPackLossyConfig) -> dict:
         weight = prepare_weight(weight, scheme=self.name, ndim=2, dtypes=SUPPORTED_DTYPES, require_finite=True)
         target_bpp = min(float(config.target_bpp), 1.0 if weight.dtype == torch.bool else weight.element_size() * 8.0)
         shape, device = tuple(weight.shape), weight.device
@@ -45,7 +45,7 @@ class LatticeRANSScheme(Scheme):
         validate_packed(buffers, tuple(shape), dtype)
 
     def decode(self, packed: dict, *, shape: tuple[int, ...], dtype: torch.dtype,
-               config: LatticeRANSConfig) -> torch.Tensor:
+               config: EntroPackLossyConfig) -> torch.Tensor:
         buffers = packed_buffers(packed, LatticeBuffers)
         source = buffers.layout.device
         lane, lane_device = self.lane_for(buffers.layout, config.execution_backend, gate_dtype=False)

@@ -33,7 +33,7 @@ FP8 和 INT8 的额外硬件要求见 [Compressed Linear 使用指南](Linear-la
 
 ## 直接压缩张量
 
-以下示例使用 `LatticeRANSConfig(target_bpp=3.5)` 选择有损压缩，将二维 BF16 张量
+以下示例使用 `EntroPackLossyConfig(target_bpp=3.5)` 选择有损压缩，将二维 BF16 张量
 压缩到每参数 3.5 bit 的目标码率，再恢复为原来的形状和数据类型。
 
 ```python
@@ -41,7 +41,7 @@ import torch
 import entropack as ep
 
 tensor = (torch.randn(256, 256, device="cuda") * 0.02).to(torch.bfloat16)
-config = ep.LatticeRANSConfig(target_bpp=3.5)
+config = ep.EntroPackLossyConfig(target_bpp=3.5)
 
 compressed = ep.compress(tensor, config)
 restored = ep.decompress(compressed, config)
@@ -68,7 +68,7 @@ import torch
 import entropack as ep
 
 linear = torch.nn.Linear(256, 256, dtype=torch.bfloat16, device="cuda")
-config = ep.LatticeRANSConfig(target_bpp=4.0)
+config = ep.EntroPackLossyConfig(target_bpp=4.0)
 layer = ep.CompressedLinear.from_linear(linear, config=config)
 x = torch.randn(8, 256, dtype=torch.bfloat16, device="cuda")
 

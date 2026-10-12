@@ -7,9 +7,9 @@ except metadata.PackageNotFoundError:
 
 from .compression import CompressedTensor, compress, decompress
 from .linear import CompressedFP8Linear, CompressedINT8Linear, CompressedLinear
-from .schemes import CompressionConfig, DFloat11Config, LatticeRANSConfig, RawConfig, TileANSConfig
+from .schemes import CompressionConfig, DFloat11Config, EntroPackLossyConfig, LatticeRANSConfig, RawConfig, TileANSConfig
 
 __all__ = [
     "CompressedFP8Linear", "CompressedINT8Linear", "CompressedLinear", "CompressedTensor", "CompressionConfig",
-    "DFloat11Config", "LatticeRANSConfig", "RawConfig", "TileANSConfig", "__version__", "compress", "decompress",
+    "DFloat11Config", "EntroPackLossyConfig", "LatticeRANSConfig", "RawConfig", "TileANSConfig", "__version__", "compress", "decompress",
 ]

@@ -24,4 +24,4 @@ General-purpose tensor compression for PyTorch, with lossless and adjustable los
 
    Principles/DFloat11
    Principles/Tile-ANS
-   Principles/Lattice-rANS
+   Principles/EntroPack-Lossy

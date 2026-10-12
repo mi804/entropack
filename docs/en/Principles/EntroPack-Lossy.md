@@ -1,7 +1,7 @@
-# EntroPack lattice compression
+# EntroPack Lossy Compression
 
 EntroPack's lattice scheme combines lossy vector quantization with lossless entropy coding
-to compress two-dimensional tensors. `LatticeRANSConfig` accepts finite target bitrates in
+to compress two-dimensional tensors. `EntroPackLossyConfig` accepts finite target bitrates in
 [0.001, 11] bits per parameter, including non-integer values. Decompression retains the input dtype,
 while the target parameter controls storage rate.
 
@@ -61,7 +61,7 @@ import torch
 import entropack as ep
 
 tensor = (torch.randn(256, 256, device="cuda") * 0.02).to(torch.bfloat16)
-config = ep.LatticeRANSConfig(target_bpp=3.5)
+config = ep.EntroPackLossyConfig(target_bpp=3.5)
 
 compressed = ep.compress(tensor, config)
 restored = ep.decompress(compressed, config)

@@ -23,8 +23,8 @@ SUBSAMPLE_SEED_MULTIPLIER = 1000003
 
 
 @dataclass
-class LatticeRANSConfig(CompressionConfig):
-    """Target-rate compression settings for finite, two-dimensional tensors.
+class EntroPackLossyConfig(CompressionConfig):
+    """EntroPack lossy compression settings for finite, two-dimensional tensors.
 
     The encoder selects a quantization scale using sampled storage estimates, fits row
     reconstruction scales, and optionally applies per-row rate–distortion refinement.
@@ -49,6 +49,9 @@ class LatticeRANSConfig(CompressionConfig):
     threads_per_block: Annotated[int | None, Range(1, None)] = None
     #: Prefetch encoded payload into the GPU L2 cache during decoding.
     l2_prefetch: bool = True
+
+
+LatticeRANSConfig = EntroPackLossyConfig
 
 
 LATTICE_DIM = 8

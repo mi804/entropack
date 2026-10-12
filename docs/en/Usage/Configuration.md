@@ -9,17 +9,17 @@ A Config selects the compression scheme and its encoding and decoding parameters
 | --- | --- | --- |
 | `DFloat11Config()` | Lossless BF16 compression | BF16 tensors |
 | `TileANSConfig()` | Lossless compression for multiple dtypes | Supported tensor dtypes |
-| `LatticeRANSConfig(target_bpp=...)` | Lossy compression at a target bitrate | Nonempty, finite, two-dimensional tensors |
+| `EntroPackLossyConfig(target_bpp=...)` | Lossy compression at a target bitrate | Nonempty, finite, two-dimensional tensors |
 
 Both lossless schemes reproduce every input bit. Their compressed size depends on the tensor's
 data distribution. `TileANSConfig` also supports BF16, so either lossless scheme can be used for
-that dtype. `LatticeRANSConfig` accepts finite targets with `0.001 <= target_bpp <= 11` bits per
+that dtype. `EntroPackLossyConfig` accepts finite targets with `0.001 <= target_bpp <= 11` bits per
 element, including non-integer values. Its actual stored rate is available through
 `CompressedTensor.actual_bpp`.
 
 ## Supported tensor dtypes
 
-| Tensor dtype | `DFloat11Config` | `TileANSConfig` | `LatticeRANSConfig` |
+| Tensor dtype | `DFloat11Config` | `TileANSConfig` | `EntroPackLossyConfig` |
 |---|---|---|---|
 | `float32` | — | lossless | lossy |
 | `float16` | — | lossless | lossy |
@@ -78,9 +78,13 @@ Lossless compression of the supported tensor dtypes.
 | `raw_lane_threshold` | `float` in [0, 8] | `7.9` | Encode | Threshold for storing hard-to-compress data directly, measured in estimated encoded bits per input byte. |
 | `threads_per_block` | Positive `int` or `None` | `None` | Both | GPU block width. `None` selects automatically. |
 
-## LatticeRANSConfig
+## EntroPackLossyConfig
 
 Lossy compression of finite, two-dimensional tensors.
+
+`LatticeRANSConfig` is an alias of `EntroPackLossyConfig` that reflects its lattice
+quantization and rANS entropy coding design. Both names refer to the same configuration
+class and have identical parameters and behavior.
 
 At encoding time, the effective target is the smaller of `target_bpp` and the dtype limit:
 1 bpp for `bool`, 8 bpp for `int8`, `uint8`, and all supported FP8 dtypes, and 11 bpp for
@@ -104,4 +108,4 @@ metadata overhead can make low targets unattainable. Compression of `bool` remai
 ## Compression principles
 
 The encoding and decoding processes are described in [DFloat11](../Principles/DFloat11.md),
-[Tile-ANS](../Principles/Tile-ANS.md), and [Lattice-rANS](../Principles/Lattice-rANS.md).
+[Tile-ANS](../Principles/Tile-ANS.md), and [EntroPack Lossy Compression](../Principles/EntroPack-Lossy.md).

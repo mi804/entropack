@@ -58,7 +58,7 @@ import torch
 import entropack as ep
 
 tensor = (torch.randn(256, 256, device="cuda") * 0.02).to(torch.bfloat16)
-config = ep.LatticeRANSConfig(target_bpp=3.5)
+config = ep.EntroPackLossyConfig(target_bpp=3.5)
 
 compressed = ep.compress(tensor, config)
 restored = ep.decompress(compressed, config)
@@ -84,7 +84,7 @@ import torch
 import entropack as ep
 
 linear = torch.nn.Linear(256, 256, dtype=torch.bfloat16, device="cuda")
-config = ep.LatticeRANSConfig(target_bpp=4.0)
+config = ep.EntroPackLossyConfig(target_bpp=4.0)
 layer = ep.CompressedLinear.from_linear(linear, config=config)
 x = torch.randn(8, 256, dtype=torch.bfloat16, device="cuda")
 
@@ -119,7 +119,7 @@ and decompression functions or to a compressed Linear layer's constructor.
 | --- | --- |
 | `DFloat11Config()` | Specialized lossless compression for BF16 tensors. Decompression restores every input bit, for applications requiring exact recovery. |
 | `TileANSConfig()` | Lossless compression for BF16, FP16, FP32, FP8, INT8, and other supported dtypes. The compression ratio depends on the input data distribution. |
-| `LatticeRANSConfig(target_bpp=...)` | Lossy compression of 2D floating-point and integer tensors. `target_bpp` specifies the target bits per parameter in [0.001, 11], including non-integer values, to balance storage size and reconstruction accuracy. |
+| `EntroPackLossyConfig(target_bpp=...)` | Lossy compression of 2D floating-point and integer tensors. `target_bpp` specifies the target bits per parameter in [0.001, 11], including non-integer values, to balance storage size and reconstruction accuracy. |
 
 See [Compression configuration](https://entropackdoc.readthedocs.io/en/latest/Usage/Configuration.html) for scheme selection
 and the complete parameter reference.
@@ -143,7 +143,7 @@ model's 505.7 ms.
 | [API reference](https://entropackdoc.readthedocs.io/en/latest/API_Reference/index.html) | Look up functions, classes, and properties |
 
 Compression principles: [DFloat11](https://entropackdoc.readthedocs.io/en/latest/Principles/DFloat11.html), [tile-ANS](https://entropackdoc.readthedocs.io/en/latest/Principles/Tile-ANS.html),
-and [EntroPack lattice quantization](https://entropackdoc.readthedocs.io/en/latest/Principles/Lattice-rANS.html).
+and [EntroPack Lossy Compression](https://entropackdoc.readthedocs.io/en/latest/Principles/EntroPack-Lossy.html).
 
 ## Acknowledgements
 

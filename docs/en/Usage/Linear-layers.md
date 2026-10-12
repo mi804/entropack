@@ -5,7 +5,7 @@ Call `layer(x)` as usual: the input's last dimension changes from `in_features` 
 `out_features`, and the other dimensions stay the same.
 
 Use a [Config](Configuration.md) to select the compression scheme and its parameters:
-`DFloat11Config`, `TileANSConfig`, or `LatticeRANSConfig`. The selected scheme must
+`DFloat11Config`, `TileANSConfig`, or `EntroPackLossyConfig`. The selected scheme must
 support the weight dtype.
 
 A CUDA GPU and the matching CuPy package are required. See
@@ -21,7 +21,7 @@ import torch
 import entropack as ep
 
 linear = torch.nn.Linear(256, 256, dtype=torch.bfloat16, device="cuda")
-config = ep.LatticeRANSConfig(target_bpp=4.0)
+config = ep.EntroPackLossyConfig(target_bpp=4.0)
 layer = ep.CompressedLinear.from_linear(linear, config=config)
 x = torch.randn(8, 256, dtype=torch.bfloat16, device="cuda")
 
@@ -46,7 +46,7 @@ model = torch.nn.Sequential(
     torch.nn.GELU(),
     torch.nn.Linear(256, 64),
 ).to(device="cuda", dtype=torch.bfloat16).eval()
-config = ep.LatticeRANSConfig(target_bpp=4.0)
+config = ep.EntroPackLossyConfig(target_bpp=4.0)
 
 
 def compress_linears(module, config, skip=(), prefix=""):
@@ -82,7 +82,7 @@ error; use `skip` to keep that layer in its original form.
 | `CompressedINT8Linear` | INT8 codes | INT8 weights and activations, requires a CUDA GPU with SM8.0 or later |
 
 For `CompressedFP8Linear` and `CompressedINT8Linear`, use `config=None` for FP8 or INT8
-quantization alone, or pass `LatticeRANSConfig(target_bpp=...)` to apply further lossy
+quantization alone, or pass `EntroPackLossyConfig(target_bpp=...)` to apply further lossy
 compression to the quantized weights. The target must be at least 0.001 bpp and less than 8 bpp.
 
 ```python
@@ -91,7 +91,7 @@ import entropack as ep
 
 linear = torch.nn.Linear(256, 256, dtype=torch.bfloat16, device="cuda")
 layer = ep.CompressedINT8Linear.from_linear(
-    linear, config=ep.LatticeRANSConfig(target_bpp=4.0)
+    linear, config=ep.EntroPackLossyConfig(target_bpp=4.0)
 )
 x = torch.randn(32, 256, dtype=torch.bfloat16, device="cuda")
 with torch.inference_mode():
@@ -124,7 +124,7 @@ from pathlib import Path
 import torch
 import entropack as ep
 
-config = ep.LatticeRANSConfig(target_bpp=4.0)
+config = ep.EntroPackLossyConfig(target_bpp=4.0)
 model = torch.nn.Sequential(
     torch.nn.Linear(256, 256),
     torch.nn.GELU(),

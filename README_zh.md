@@ -53,7 +53,7 @@ import torch
 import entropack as ep
 
 tensor = (torch.randn(256, 256, device="cuda") * 0.02).to(torch.bfloat16)
-config = ep.LatticeRANSConfig(target_bpp=3.5)
+config = ep.EntroPackLossyConfig(target_bpp=3.5)
 
 compressed = ep.compress(tensor, config)
 restored = ep.decompress(compressed, config)
@@ -78,7 +78,7 @@ import torch
 import entropack as ep
 
 linear = torch.nn.Linear(256, 256, dtype=torch.bfloat16, device="cuda")
-config = ep.LatticeRANSConfig(target_bpp=4.0)
+config = ep.EntroPackLossyConfig(target_bpp=4.0)
 layer = ep.CompressedLinear.from_linear(linear, config=config)
 x = torch.randn(8, 256, dtype=torch.bfloat16, device="cuda")
 
@@ -111,7 +111,7 @@ Config 定义压缩方案及其参数，在调用张量编解码函数或构造 
 | --- | --- |
 | `DFloat11Config()` | 专用于 BF16 张量的无损压缩，解压后逐位恢复输入，适合要求精确恢复的场景。 |
 | `TileANSConfig()` | 支持 BF16、FP16、FP32、FP8、INT8 等多种数据类型的无损压缩。压缩比取决于输入的数据分布。 |
-| `LatticeRANSConfig(target_bpp=...)` | 支持浮点和整数二维张量的有损压缩。`target_bpp` 指定每参数的目标比特数，范围为 [0.001, 11]，支持非整数值，用于调整存储大小与重建精度之间的取舍。 |
+| `EntroPackLossyConfig(target_bpp=...)` | 支持浮点和整数二维张量的有损压缩。`target_bpp` 指定每参数的目标比特数，范围为 [0.001, 11]，支持非整数值，用于调整存储大小与重建精度之间的取舍。 |
 
 方案选择和完整参数见[压缩配置](https://entropackdoc.readthedocs.io/zh-cn/latest/Usage/Configuration.html)。
 
@@ -133,7 +133,7 @@ Config 定义压缩方案及其参数，在调用张量编解码函数或构造 
 | [API 参考](https://entropackdoc.readthedocs.io/zh-cn/latest/API_Reference/index.html) | 查询函数、类与属性 |
 
 压缩原理：[DFloat11](https://entropackdoc.readthedocs.io/zh-cn/latest/Principles/DFloat11.html)、[tile-ANS](https://entropackdoc.readthedocs.io/zh-cn/latest/Principles/Tile-ANS.html)、
-[EntroPack 格量化](https://entropackdoc.readthedocs.io/zh-cn/latest/Principles/Lattice-rANS.html)。
+[EntroPack 有损压缩](https://entropackdoc.readthedocs.io/zh-cn/latest/Principles/EntroPack-Lossy.html)。
 
 ## 致谢
 

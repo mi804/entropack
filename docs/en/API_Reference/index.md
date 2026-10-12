@@ -23,7 +23,7 @@ a nonempty two-dimensional tensor with finite values.
 | Parameter | Meaning |
 | --- | --- |
 | `tensor` | PyTorch tensor to compress |
-| `config` | Required. Selects a scheme through `DFloat11Config`, `TileANSConfig`, or `LatticeRANSConfig` |
+| `config` | Required. Selects a scheme through `DFloat11Config`, `TileANSConfig`, or `EntroPackLossyConfig` |
 
 Some encoding failures emit a warning explaining the failure and return an uncompressed
 container with `compress_method == "raw"`. Invalid configurations and backend dispatch
@@ -147,7 +147,7 @@ dtype and device.
 The layer class determines the code format. The constructor's `dtype` argument does not change
 the FP8 or INT8 format.
 
-With `config=None`, quantized codes are stored directly. Passing `LatticeRANSConfig` applies
+With `config=None`, quantized codes are stored directly. Passing `EntroPackLossyConfig` applies
 additional lossy compression with `0.001 <= target_bpp < 8`. `stored_nbytes` includes the
 per-row quantization scales needed to reconstruct weights.
 
@@ -168,7 +168,10 @@ The following classes inherit from `CompressionConfig`:
 | --- | --- |
 | `DFloat11Config` | Lossless BF16 compression |
 | `TileANSConfig` | Lossless tiled ANS compression for multiple dtypes |
-| `LatticeRANSConfig` | Lossy lattice quantization with bitrate controlled by `target_bpp` |
+| `EntroPackLossyConfig` | Lossy lattice quantization with bitrate controlled by `target_bpp` |
+
+`LatticeRANSConfig` is an alias of `EntroPackLossyConfig`, reflecting its lattice
+quantization and rANS entropy coding design. Both names refer to the same class.
 
 See [Compression configuration](../Usage/Configuration.md) for scheme selection, defaults,
 and parameter ranges.
