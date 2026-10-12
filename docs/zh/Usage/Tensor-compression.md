@@ -17,7 +17,7 @@ import torch
 import entropack as ep
 
 tensor = (torch.randn(128, 256, device="cuda") * 0.02).to(torch.bfloat16)
-config = ep.LatticeRANSConfig(target_bpp=4.0)
+config = ep.EntroPackLossyConfig(target_bpp=4.0)
 compressed = ep.compress(tensor, config)
 restored = ep.decompress(compressed, config)
 relative_error = (restored.float() - tensor.float()).norm() / tensor.float().norm()
@@ -35,7 +35,7 @@ import torch
 import entropack as ep
 
 tensor = (torch.randn(128, 256, device="cuda") * 0.02).to(torch.bfloat16)
-config = ep.LatticeRANSConfig(target_bpp=4.0)
+config = ep.EntroPackLossyConfig(target_bpp=4.0)
 compressed = ep.compress(tensor, config)
 
 print(compressed.shape, compressed.dtype, compressed.compress_method)

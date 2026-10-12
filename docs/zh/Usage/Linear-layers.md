@@ -5,7 +5,7 @@
 其余维度不变。
 
 通过 [Config](Configuration.md) 指定压缩方案和参数，可选 `DFloat11Config`、
-`TileANSConfig` 或 `LatticeRANSConfig`，所选方案需支持权重的数据类型。
+`TileANSConfig` 或 `EntroPackLossyConfig`，所选方案需支持权重的数据类型。
 
 运行需要 CUDA GPU 和对应版本的 CuPy，安装方式见[快速上手](Quick-start.md)。
 
@@ -19,7 +19,7 @@ import torch
 import entropack as ep
 
 linear = torch.nn.Linear(256, 256, dtype=torch.bfloat16, device="cuda")
-config = ep.LatticeRANSConfig(target_bpp=4.0)
+config = ep.EntroPackLossyConfig(target_bpp=4.0)
 layer = ep.CompressedLinear.from_linear(linear, config=config)
 x = torch.randn(8, 256, dtype=torch.bfloat16, device="cuda")
 
@@ -44,7 +44,7 @@ model = torch.nn.Sequential(
     torch.nn.GELU(),
     torch.nn.Linear(256, 64),
 ).to(device="cuda", dtype=torch.bfloat16).eval()
-config = ep.LatticeRANSConfig(target_bpp=4.0)
+config = ep.EntroPackLossyConfig(target_bpp=4.0)
 
 
 def compress_linears(module, config, skip=(), prefix=""):
@@ -79,7 +79,7 @@ print(output.shape, type(model[0]).__name__, type(model[2]).__name__)
 | `CompressedINT8Linear` | INT8 量化码 | INT8 权重和激活，需 CUDA GPU（SM8.0 及以上） |
 
 对于 `CompressedFP8Linear` 和 `CompressedINT8Linear`，`config=None` 仅做 FP8 或 INT8 量化，
-传入 `LatticeRANSConfig(target_bpp=...)` 则会对量化后的权重进一步进行有损压缩。
+传入 `EntroPackLossyConfig(target_bpp=...)` 则会对量化后的权重进一步进行有损压缩。
 目标码率需大于等于 0.001 bpp 且低于 8 bpp。
 
 ```python
@@ -88,7 +88,7 @@ import entropack as ep
 
 linear = torch.nn.Linear(256, 256, dtype=torch.bfloat16, device="cuda")
 layer = ep.CompressedINT8Linear.from_linear(
-    linear, config=ep.LatticeRANSConfig(target_bpp=4.0)
+    linear, config=ep.EntroPackLossyConfig(target_bpp=4.0)
 )
 x = torch.randn(32, 256, dtype=torch.bfloat16, device="cuda")
 with torch.inference_mode():
@@ -118,7 +118,7 @@ from pathlib import Path
 import torch
 import entropack as ep
 
-config = ep.LatticeRANSConfig(target_bpp=4.0)
+config = ep.EntroPackLossyConfig(target_bpp=4.0)
 model = torch.nn.Sequential(
     torch.nn.Linear(256, 256),
     torch.nn.GELU(),

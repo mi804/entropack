@@ -24,4 +24,4 @@ EntroPack 文档
 
    Principles/DFloat11
    Principles/Tile-ANS
-   Principles/Lattice-rANS
+   Principles/EntroPack-Lossy

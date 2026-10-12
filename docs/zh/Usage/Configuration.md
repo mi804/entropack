@@ -8,15 +8,15 @@ Config 选择压缩方案并设置编解码参数。`execution_backend` 默认�
 | --- | --- | --- |
 | `DFloat11Config()` | BF16 无损压缩 | BF16 张量 |
 | `TileANSConfig()` | 多种数据类型的无损压缩 | 支持的数据类型 |
-| `LatticeRANSConfig(target_bpp=...)` | 按目标码率进行有损压缩 | 非空、有限值组成的二维张量 |
+| `EntroPackLossyConfig(target_bpp=...)` | 按目标码率进行有损压缩 | 非空、有限值组成的二维张量 |
 
 两个无损方案均逐位恢复输入，压缩后的大小取决于张量的数据分布。`TileANSConfig` 也支持 BF16，
-因此 BF16 张量可以选择其中任一无损方案。`LatticeRANSConfig` 接受满足 `0.001 <= target_bpp <= 11`
+因此 BF16 张量可以选择其中任一无损方案。`EntroPackLossyConfig` 接受满足 `0.001 <= target_bpp <= 11`
 的有限目标码率，单位为每参数比特数，支持非整数值。实际存储码率可通过 `CompressedTensor.actual_bpp` 查看。
 
 ## 支持的张量数据类型
 
-| 数据类型 | `DFloat11Config` | `TileANSConfig` | `LatticeRANSConfig` |
+| 数据类型 | `DFloat11Config` | `TileANSConfig` | `EntroPackLossyConfig` |
 |---|---|---|---|
 | `float32` | — | 无损 | 有损 |
 | `float16` | — | 无损 | 有损 |
@@ -74,9 +74,12 @@ PyTorch 数据类型。打包的四比特格式、FP64 和复数类型不在支�
 | `raw_lane_threshold` | [0, 8] 内浮点数 | `7.9` | 编码 | 决定何时直接存储难以压缩的数据，单位为每字节的预计编码比特数 |
 | `threads_per_block` | 正整数或 `None` | `None` | 编解码 | GPU 线程块宽度，`None` 自动选择 |
 
-## LatticeRANSConfig
+## EntroPackLossyConfig
 
 用于有限值组成的二维张量的有损压缩。
+
+`LatticeRANSConfig` 是 `EntroPackLossyConfig` 的技术路线别名，体现其格量化与 rANS 熵编码设计。
+两者指向同一个配置类，参数与行为完全一致。
 
 编码时使用的有效目标为 `target_bpp` 与数据类型上限中的较小值：`bool` 为 1 bpp，
 `int8`、`uint8` 和所有支持的 FP8 类型为 8 bpp，其他支持的类型为 11 bpp。
@@ -99,4 +102,4 @@ Config 保留用户设置的值。这些上限仅作用于编码目标；`actual
 ## 压缩原理
 
 各方案的编解码过程分别见 [DFloat11](../Principles/DFloat11.md)、
-[Tile-ANS](../Principles/Tile-ANS.md) 和 [Lattice-rANS](../Principles/Lattice-rANS.md)。
+[Tile-ANS](../Principles/Tile-ANS.md) 和 [EntroPack 有损压缩](../Principles/EntroPack-Lossy.md)。

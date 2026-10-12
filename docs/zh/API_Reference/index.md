@@ -20,7 +20,7 @@ compress(tensor: torch.Tensor, config: CompressionConfig) -> CompressedTensor
 | 参数 | 含义 |
 | --- | --- |
 | `tensor` | 待压缩的 PyTorch 张量 |
-| `config` | 必传，使用 `DFloat11Config`、`TileANSConfig` 或 `LatticeRANSConfig` 选择方案 |
+| `config` | 必传，使用 `DFloat11Config`、`TileANSConfig` 或 `EntroPackLossyConfig` 选择方案 |
 
 部分编码失败会发出说明原因的警告，并返回 `compress_method == "raw"` 的未压缩容器。
 无效配置或后端选择失败会直接报错。
@@ -131,7 +131,7 @@ CompressedLinear.from_linear(linear, **kwargs) -> CompressedLinear
 
 量化码格式由层类决定，构造参数 `dtype` 不改变 FP8 或 INT8 格式。
 
-`config=None` 时直接保存量化码。指定 `LatticeRANSConfig` 时进一步进行有损压缩，
+`config=None` 时直接保存量化码。指定 `EntroPackLossyConfig` 时进一步进行有损压缩，
 目标码率须满足 `0.001 <= target_bpp < 8`。`stored_nbytes` 包含重建权重所需的逐行量化尺度。
 
 | 方法 | 返回值 | 含义 |
@@ -149,6 +149,9 @@ Config 同时用于张量编解码和 Compressed Linear 的权重存储。以下
 | --- | --- |
 | `DFloat11Config` | BF16 无损压缩 |
 | `TileANSConfig` | 多种数据类型的分块 ANS 无损压缩 |
-| `LatticeRANSConfig` | 以 `target_bpp` 控制码率的格量化有损压缩 |
+| `EntroPackLossyConfig` | 以 `target_bpp` 控制码率的格量化有损压缩 |
+
+`LatticeRANSConfig` 是 `EntroPackLossyConfig` 的技术路线别名，体现其格量化与 rANS 熵编码设计。
+两者指向同一个配置类。
 
 方案选择、默认值和参数范围见[压缩配置](../Usage/Configuration.md)。

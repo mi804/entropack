@@ -34,7 +34,7 @@ The first call may be slower while CUDA kernels compile. Measure performance aft
 
 ## Direct tensor compression
 
-This example selects lossy compression with `LatticeRANSConfig(target_bpp=3.5)`, compresses
+This example selects lossy compression with `EntroPackLossyConfig(target_bpp=3.5)`, compresses
 a 2D BF16 tensor at a target of 3.5 bits per parameter, and restores its original shape and dtype.
 
 ```python
@@ -42,7 +42,7 @@ import torch
 import entropack as ep
 
 tensor = (torch.randn(256, 256, device="cuda") * 0.02).to(torch.bfloat16)
-config = ep.LatticeRANSConfig(target_bpp=3.5)
+config = ep.EntroPackLossyConfig(target_bpp=3.5)
 
 compressed = ep.compress(tensor, config)
 restored = ep.decompress(compressed, config)
@@ -71,7 +71,7 @@ import torch
 import entropack as ep
 
 linear = torch.nn.Linear(256, 256, dtype=torch.bfloat16, device="cuda")
-config = ep.LatticeRANSConfig(target_bpp=4.0)
+config = ep.EntroPackLossyConfig(target_bpp=4.0)
 layer = ep.CompressedLinear.from_linear(linear, config=config)
 x = torch.randn(8, 256, dtype=torch.bfloat16, device="cuda")
 
