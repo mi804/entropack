@@ -116,7 +116,7 @@ CompressedLinear.from_linear(linear, **kwargs) -> CompressedLinear
 
 使用标准 `state_dict()` / `load_state_dict()` 保存与恢复层状态。
 每个压缩层把权重存成一个 uint8 张量，内含编解码头部与全部分量；FP8 与 INT8 层另加一个
-`quant_scale` 张量存放行尺度。`state_dict()` 以 `weight.entropack_quant_state`
+`weight_quant_scale` 张量存放行尺度。`state_dict()` 以 `weight.entropack_quant_state`
 为名交出打包结果——即检查点存储它的名字。
 加载前须创建相同层类型、形状、容器数据类型和压缩方案的层，Config 对象本身不会保存在检查点中。
 `.to(device)` 可迁移层，模型的数据类型转换不会重新编码已压缩的权重。

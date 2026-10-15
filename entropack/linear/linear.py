@@ -253,8 +253,8 @@ class QuantizedLinear(CompressedLinear):
     code_alignment: ClassVar[int]
     min_tokens: ClassVar[int]
     min_capability: ClassVar[tuple[int, int]]
-    state_buffer_names = ("quant_scale",)
-    state_buffer_dtypes = {"quant_scale": torch.float32}
+    state_buffer_names = ("weight_quant_scale",)
+    state_buffer_dtypes = {"weight_quant_scale": torch.float32}
 
     def __init__(
         self, in_features: int, out_features: int, bias: bool = True, *, config=None,
@@ -298,14 +298,14 @@ class QuantizedLinear(CompressedLinear):
         self._check_weight_shape(weight.shape)
         codes, scale = self._quantize_rows(weight.detach())
         self.weight = torch.nn.Parameter(self._compress_tensor(codes), requires_grad=False)
-        self.quant_scale = scale
+        self.weight_quant_scale = scale
 
     def codes(self, device: str | torch.device | None = None) -> torch.Tensor:
         """Decode the weight codes in ``code_dtype`` for low-precision matrix multiplication."""
         return decompress(self._container().to(device=device, dtype=self.code_dtype), self._decode_config)
 
     def _scale(self, device: torch.device) -> torch.Tensor:
-        return self.quant_scale.to(device=device, dtype=self.state_buffer_dtypes["quant_scale"])
+        return self.weight_quant_scale.to(device=device, dtype=self.state_buffer_dtypes["weight_quant_scale"])
 
     def dequantize(self, device: str | torch.device | None = None) -> torch.Tensor:
         """Reconstruct dense weights in the dtype used to initialize the layer."""

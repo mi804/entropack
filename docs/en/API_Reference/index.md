@@ -129,7 +129,7 @@ when numerical weights are needed.
 
 Use standard `state_dict()` / `load_state_dict()` calls to save and restore layer state.
 Each compressed layer stores its weight as one uint8 tensor holding the codec header and every component;
-FP8 and INT8 layers add one `quant_scale` tensor for their row scales.
+FP8 and INT8 layers add one `weight_quant_scale` tensor for their row scales.
 `state_dict()` hands the quant_state out under `weight.entropack_quant_state`, the name a checkpoint stores it
 under.
 Before loading, construct layers with matching classes, shapes, container dtypes, and compression
