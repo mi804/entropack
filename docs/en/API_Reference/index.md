@@ -73,11 +73,11 @@ This measures the compressed representation, not checkpoint file size or runtime
 | --- | --- | --- |
 | `to(...)` | `CompressedTensor` | Changes device or output dtype without recompression; `copy=True` copies storage |
 | `storage_nbytes(include_header=True)` | `int` | Total compressed size in bytes; `include_header=False` excludes the container header |
-| `state_dict(prefix="")` | `dict[str, torch.Tensor]` | Exports the compressed tensor for saving |
-| `CompressedTensor.from_state_dict(state, prefix="")` | `CompressedTensor` | Restores the container from that dictionary without recompression |
+| `state_dict()` | `dict[str, torch.Tensor]` | Exports the packed quant_state for saving |
+| `CompressedTensor.from_state_dict(state)` | `CompressedTensor` | Restores the container from that dictionary without recompression |
 
-Use the same `prefix` when saving and restoring. The dictionary can be saved with `torch.save`
-and loaded with `torch.load(..., weights_only=True)`. Set `map_location` to choose the device
+The dictionary can be saved with `torch.save` and loaded with `torch.load(..., weights_only=True)`.
+Set `map_location` to choose the device
 on which it will be restored.
 Loading restores the encoded dtype. Call `.to(dtype=...)` afterwards if a different output dtype is needed.
 
@@ -128,6 +128,10 @@ Invoke the forward operation as `layer(x)`. `.weight` is a compressed tensor; us
 when numerical weights are needed.
 
 Use standard `state_dict()` / `load_state_dict()` calls to save and restore layer state.
+Each compressed layer stores its weight as one uint8 tensor holding the codec header and every component;
+FP8 and INT8 layers add one `weight_quant_scale` tensor for their row scales.
+`state_dict()` hands the quant_state out under `weight.entropack_quant_state`, the name a checkpoint stores it
+under.
 Before loading, construct layers with matching classes, shapes, container dtypes, and compression
 schemes. The Config object itself is not stored in the checkpoint. `.to(device)` moves the layer;
 model dtype conversion does not re-encode its compressed weights.

@@ -32,7 +32,7 @@ class CompressedLinear(torch.nn.Linear):
     """
 
     state_buffer_names: ClassVar[tuple[str, ...]] = ()
-    state_prefix: ClassVar[str] = "weight._entropack."
+    state_buffer_dtypes: ClassVar[dict[str, torch.dtype]] = {}
 
     def __init__(
         self, in_features: int, out_features: int, bias: bool = True, *, config=None,
@@ -40,7 +40,6 @@ class CompressedLinear(torch.nn.Linear):
     ):
         with torch.device("meta"):
             super().__init__(in_features, out_features, bias=False, dtype=dtype)
-        self.weight = None
         if bias:
             self.bias = torch.nn.Parameter(torch.zeros(out_features, dtype=dtype, device=device), requires_grad=False)
         self.config = config
@@ -49,8 +48,11 @@ class CompressedLinear(torch.nn.Linear):
             scheme = get_scheme(name_for_config(config))
             if not scheme.supports(self.container_dtype):
                 raise ValueError(f"'{scheme.name}' does not support format {self.container_dtype}")
+        self.weight = torch.nn.Parameter(torch.zeros(0, dtype=self._init_dtype, device=device), requires_grad=False)
         for name in self.state_buffer_names:
-            self.register_buffer(name, None, persistent=False)
+            self.register_buffer(
+                name, torch.zeros(out_features, dtype=self.state_buffer_dtypes[name], device=device), persistent=True
+            )
 
     @property
     def _encode_config(self):
@@ -71,10 +73,9 @@ class CompressedLinear(torch.nn.Linear):
 
     @property
     def qweight(self) -> torch.Tensor:
-        """A packed weight buffer exposed for quantization-framework compatibility."""
-        if self.weight is not None:
-            for name in self.weight.scheme.buffer_names:
-                return self.weight.buffers[name]
+        """The entropack_quant_state tensor, exposed for quantization-framework compatibility."""
+        if isinstance(self.weight, CompressedTensor):
+            return self.weight.entropack_quant_state
         return self.bias
 
     @property
@@ -95,7 +96,13 @@ class CompressedLinear(torch.nn.Linear):
 
     def compress_weight(self, weight: torch.Tensor) -> None:
         """Initialize the layer with compressed ``weight``."""
+        self._check_weight_shape(weight.shape)
         self.weight = torch.nn.Parameter(self._compress_tensor(weight.detach()), requires_grad=False)
+
+    def _check_weight_shape(self, shape) -> None:
+        expected = (self.out_features, self.in_features)
+        if tuple(shape) != expected:
+            raise ValueError(f"weight has shape {tuple(shape)}, but the layer expects {expected}")
 
     def _compress_tensor(self, tensor: torch.Tensor) -> CompressedTensor:
         compressed = compress(tensor.to(self.container_dtype), self._encode_config)
@@ -106,8 +113,16 @@ class CompressedLinear(torch.nn.Linear):
             )
         return compressed
 
+    def _container(self) -> CompressedTensor:
+        if not isinstance(self.weight, CompressedTensor):
+            raise RuntimeError(
+                f"{type(self).__name__}({self.in_features}, {self.out_features}) has nothing to decode: "
+                "the weight was not correctly loaded"
+            )
+        return self.weight
+
     def _reconstruct(self, device: str | torch.device | None = None) -> torch.Tensor:
-        return decompress(self.weight.to(device=device), self._decode_config)
+        return decompress(self._container().to(device=device), self._decode_config)
 
     def dequantize(self, device: str | torch.device | None = None) -> torch.Tensor:
         """Reconstruct the dense weight on ``device``, defaulting to the weight's device."""
@@ -151,7 +166,7 @@ class CompressedLinear(torch.nn.Linear):
     def extra_repr(self) -> str:
         scheme = "auto" if self.config is None else name_for_config(self.config)
         parts = [f"scheme={scheme}", f"container={str(self.container_dtype).removeprefix('torch.')}"]
-        if self.weight is not None:
+        if isinstance(self.weight, CompressedTensor):
             parts.append(f"bits={self.compressed_bits:.3f}")
         if self.config is not None:
             parts.append(f"config={type(self.config).__name__}")
@@ -173,68 +188,42 @@ class CompressedLinear(torch.nn.Linear):
 
     def _save_to_state_dict(self, destination: dict, prefix: str, keep_vars: bool) -> None:
         super()._save_to_state_dict(destination, prefix, keep_vars)
-        # Serialize the packed representation instead of the wrapper parameter.
-        destination.pop(prefix + "weight", None)
-        if self.weight is None:
-            return
-        container_prefix = prefix + self.state_prefix
-        written = self.weight.state_dict(container_prefix)
-        for name in self.state_buffer_names:
-            buffer = self._buffers[name]
-            if buffer is not None:
-                written[container_prefix + name] = buffer
-        for key, value in written.items():
-            destination[key] = value if keep_vars else value.detach()
+        # The wrapper holds nothing a checkpoint format could store, so the packed quant_state takes its place.
+        if isinstance(self.weight, CompressedTensor):
+            destination.pop(prefix + "weight")
+            destination[prefix + "weight.entropack_quant_state"] = (
+                self.weight.entropack_quant_state if keep_vars else self.weight.entropack_quant_state.detach()
+            )
 
     def _load_from_state_dict(self, state_dict: dict, prefix: str, local_metadata, strict, missing_keys, unexpected_keys, error_msgs) -> None:
-        container_prefix = prefix + self.state_prefix
-        header_key = container_prefix + "header"
-        if header_key in state_dict:
-            consumed = [header_key]
+        key = prefix + "weight.entropack_quant_state"
+        if key in state_dict:
             try:
-                compressed = CompressedTensor.from_state_dict(state_dict, prefix=container_prefix)
-                consumed.extend(container_prefix + "buffers." + name for name in compressed.buffers)
+                entropack_quant_state = state_dict[key]
                 assign = local_metadata.get("assign_to_params_buffers", False)
-
-                # Copy loading keeps the target device and existing Parameter; assign=True adopts the checkpoint tensors.
-                if self.weight is not None:
-                    device = self.weight.device
-                elif self.bias is not None and self.bias.device.type != "meta":
-                    device = self.bias.device
-                else:
-                    device = compressed.device
+                current = self._parameters.get("weight")
                 if not assign:
-                    compressed = compressed.to(device=device, copy=True)
-                loaded_weight = torch.nn.Parameter(compressed, requires_grad=False)
-                if not assign and self.weight is not None:
-                    torch.utils.swap_tensors(self.weight, loaded_weight)
-                else:
-                    self.weight = loaded_weight
+                    if current is not None and current.device.type != "meta":
+                        device = current.device
+                    elif self.bias is not None and self.bias.device.type != "meta":
+                        device = self.bias.device
+                    else:
+                        device = entropack_quant_state.device
+                    entropack_quant_state = entropack_quant_state.to(device=device, copy=True)
 
-                # Apply the same copy/assign behavior to auxiliary state, such as FP8/INT8 weight scales.
-                for name in self.state_buffer_names:
-                    key = container_prefix + name
-                    if key not in state_dict:
-                        raise ValueError(f"compressed state is missing '{key}'")
-                    value = state_dict[key]
-                    if not assign:
-                        if self._buffers[name] is None:
-                            value = value.to(device=device, copy=True)
-                        else:
-                            self._buffers[name].copy_(value)
-                            value = self._buffers[name]
-                    self._buffers[name] = value
-                    consumed.append(key)
+                container = CompressedTensor.unpack(entropack_quant_state)
+                self._check_weight_shape(container.shape)
+                loaded = torch.nn.Parameter(container, requires_grad=False)
+                if not assign and isinstance(current, CompressedTensor):
+                    torch.utils.swap_tensors(current, loaded)
+                else:
+                    self._parameters["weight"] = loaded
             except (TypeError, ValueError) as error:
                 error_msgs.append(f"{prefix[:-1]}: {error}")
-
-            # Leave unrecognized keys for the parent's strict checks.
-            for key in consumed:
-                state_dict.pop(key)
+            state_dict.pop(key)
         elif strict:
-            missing_keys.append(header_key)
+            missing_keys.append(key)
 
-        # Let the parent load bias without expecting a dense weight entry.
         weight = self._parameters.pop("weight")
         super()._load_from_state_dict(state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs)
         self._parameters["weight"] = weight
@@ -264,7 +253,8 @@ class QuantizedLinear(CompressedLinear):
     code_alignment: ClassVar[int]
     min_tokens: ClassVar[int]
     min_capability: ClassVar[tuple[int, int]]
-    state_buffer_names = ("weight_scale",)
+    state_buffer_names = ("weight_quant_scale",)
+    state_buffer_dtypes = {"weight_quant_scale": torch.float32}
 
     def __init__(
         self, in_features: int, out_features: int, bias: bool = True, *, config=None,
@@ -305,18 +295,22 @@ class QuantizedLinear(CompressedLinear):
 
     def compress_weight(self, weight: torch.Tensor) -> None:
         """Quantize the source weight, compress its codes, and store the row scales."""
+        self._check_weight_shape(weight.shape)
         codes, scale = self._quantize_rows(weight.detach())
         self.weight = torch.nn.Parameter(self._compress_tensor(codes), requires_grad=False)
-        self.weight_scale = scale
+        self.weight_quant_scale = scale
 
     def codes(self, device: str | torch.device | None = None) -> torch.Tensor:
         """Decode the weight codes in ``code_dtype`` for low-precision matrix multiplication."""
-        return decompress(self.weight.to(device=device, dtype=self.code_dtype), self._decode_config)
+        return decompress(self._container().to(device=device, dtype=self.code_dtype), self._decode_config)
+
+    def _scale(self, device: torch.device) -> torch.Tensor:
+        return self.weight_quant_scale.to(device=device, dtype=self.state_buffer_dtypes["weight_quant_scale"])
 
     def dequantize(self, device: str | torch.device | None = None) -> torch.Tensor:
         """Reconstruct dense weights in the dtype used to initialize the layer."""
         codes = self.codes(device)
-        return (codes.float() * self.weight_scale.to(codes.device).unsqueeze(1)).to(self._init_dtype)
+        return (codes.float() * self._scale(codes.device).unsqueeze(1)).to(self._init_dtype)
 
     def _require_8bit_gemm(self, device: torch.device) -> None:
         if device.type != "cuda":
@@ -357,7 +351,7 @@ class QuantizedLinear(CompressedLinear):
         flat = x.reshape(-1, x.shape[-1])
         activation, scale = self._quantize_activation(flat.detach())
         codes = self.codes(x.device)
-        weight_scale = self.weight_scale.to(codes.device)
+        weight_scale = self._scale(codes.device)
         tokens = activation.shape[0]
         rows, outs, cols = self._gemm_shapes(tokens)
         padded_activation = pad(pad(activation, 0, rows), 1, cols)

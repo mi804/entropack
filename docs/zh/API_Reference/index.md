@@ -66,11 +66,11 @@ decompress(compressed: CompressedTensor, config: CompressionConfig) -> torch.Ten
 | --- | --- | --- |
 | `to(...)` | `CompressedTensor` | 改变设备或解压输出类型，不重新压缩；`copy=True` 可复制存储 |
 | `storage_nbytes(include_header=True)` | `int` | 压缩结果的总字节数，`include_header=False` 时不计容器头部 |
-| `state_dict(prefix="")` | `dict[str, torch.Tensor]` | 将压缩张量导出为可保存的字典 |
-| `CompressedTensor.from_state_dict(state, prefix="")` | `CompressedTensor` | 从上述字典恢复容器，不重新压缩 |
+| `state_dict()` | `dict[str, torch.Tensor]` | 将压缩结果导出为可保存的字典 |
+| `CompressedTensor.from_state_dict(state)` | `CompressedTensor` | 从上述字典恢复容器，不重新压缩 |
 
-保存与加载的 `prefix` 必须一致。可用 `torch.save` 保存字典，并用
-`torch.load(..., weights_only=True)` 加载，通过 `map_location` 指定恢复后的设备。
+可用 `torch.save` 保存字典，并用 `torch.load(..., weights_only=True)` 加载，
+通过 `map_location` 指定恢复后的设备。
 加载后恢复编码时的数据类型；需要其他输出类型时，再调用 `.to(dtype=...)`。
 
 ## CompressedLinear
@@ -115,6 +115,9 @@ CompressedLinear.from_linear(linear, **kwargs) -> CompressedLinear
 通过 `layer(x)` 调用前向运算。`.weight` 为压缩张量，需要数值权重时使用 `dequantize()`。
 
 使用标准 `state_dict()` / `load_state_dict()` 保存与恢复层状态。
+每个压缩层把权重存成一个 uint8 张量，内含编解码头部与全部分量；FP8 与 INT8 层另加一个
+`weight_quant_scale` 张量存放行尺度。`state_dict()` 以 `weight.entropack_quant_state`
+为名交出打包结果——即检查点存储它的名字。
 加载前须创建相同层类型、形状、容器数据类型和压缩方案的层，Config 对象本身不会保存在检查点中。
 `.to(device)` 可迁移层，模型的数据类型转换不会重新编码已压缩的权重。
 
