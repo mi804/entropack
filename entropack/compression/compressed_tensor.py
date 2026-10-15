@@ -87,6 +87,10 @@ def _parse_quant_state(quant_state: torch.Tensor) -> tuple[dict, int]:
             f"CompressedTensor serialized header is missing fields {sorted(missing)}; "
             "it was likely written by a different entropack version"
         )
+    names = metadata["buffer_names"]
+    if len(set(names)) != len(names):
+        repeated = sorted(name for name in names if names.count(name) > 1)
+        raise ValueError(f"CompressedTensor serialized header repeats buffers {repeated}")
     return metadata, _aligned(end)
 
 
@@ -101,6 +105,11 @@ def _views(quant_state: torch.Tensor, metadata: dict, offset: int) -> dict[str, 
             raise ValueError(f"CompressedTensor quant_state is {quant_state.numel()} bytes, too short for buffer '{name}'")
         buffers[name] = quant_state[offset : offset + size].view(dtype).view(shape)
         offset = _aligned(offset + size)
+    if offset != quant_state.numel():
+        raise ValueError(
+            f"CompressedTensor quant_state is {quant_state.numel()} bytes, but its header and buffers account for "
+            f"{offset}; the entry is truncated or carries trailing bytes"
+        )
     return buffers
 
 
@@ -161,8 +170,6 @@ class CompressedTensor(torch.Tensor):
         return cls.unpack(inner_tensors["entropack_quant_state"])
 
     def __getstate__(self):
-        # torch refuses to serialize several tensors viewing one storage as different dtypes, so the component
-        # views stay out and only the quant_state travels.
         return {"entropack_quant_state": self.entropack_quant_state}
 
     def __setstate__(self, state):

@@ -96,7 +96,13 @@ class CompressedLinear(torch.nn.Linear):
 
     def compress_weight(self, weight: torch.Tensor) -> None:
         """Initialize the layer with compressed ``weight``."""
+        self._check_weight_shape(weight.shape)
         self.weight = torch.nn.Parameter(self._compress_tensor(weight.detach()), requires_grad=False)
+
+    def _check_weight_shape(self, shape) -> None:
+        expected = (self.out_features, self.in_features)
+        if tuple(shape) != expected:
+            raise ValueError(f"weight has shape {tuple(shape)}, but the layer expects {expected}")
 
     def _compress_tensor(self, tensor: torch.Tensor) -> CompressedTensor:
         compressed = compress(tensor.to(self.container_dtype), self._encode_config)
@@ -107,8 +113,16 @@ class CompressedLinear(torch.nn.Linear):
             )
         return compressed
 
+    def _container(self) -> CompressedTensor:
+        if not isinstance(self.weight, CompressedTensor):
+            raise RuntimeError(
+                f"{type(self).__name__}({self.in_features}, {self.out_features}) has nothing to decode: "
+                "the weight was not correctly loaded"
+            )
+        return self.weight
+
     def _reconstruct(self, device: str | torch.device | None = None) -> torch.Tensor:
-        return decompress(self.weight.to(device=device), self._decode_config)
+        return decompress(self._container().to(device=device), self._decode_config)
 
     def dequantize(self, device: str | torch.device | None = None) -> torch.Tensor:
         """Reconstruct the dense weight on ``device``, defaulting to the weight's device."""
@@ -197,7 +211,9 @@ class CompressedLinear(torch.nn.Linear):
                         device = entropack_quant_state.device
                     entropack_quant_state = entropack_quant_state.to(device=device, copy=True)
 
-                loaded = torch.nn.Parameter(CompressedTensor.unpack(entropack_quant_state), requires_grad=False)
+                container = CompressedTensor.unpack(entropack_quant_state)
+                self._check_weight_shape(container.shape)
+                loaded = torch.nn.Parameter(container, requires_grad=False)
                 if not assign and isinstance(current, CompressedTensor):
                     torch.utils.swap_tensors(current, loaded)
                 else:
@@ -279,18 +295,22 @@ class QuantizedLinear(CompressedLinear):
 
     def compress_weight(self, weight: torch.Tensor) -> None:
         """Quantize the source weight, compress its codes, and store the row scales."""
+        self._check_weight_shape(weight.shape)
         codes, scale = self._quantize_rows(weight.detach())
         self.weight = torch.nn.Parameter(self._compress_tensor(codes), requires_grad=False)
         self.quant_scale = scale
 
     def codes(self, device: str | torch.device | None = None) -> torch.Tensor:
         """Decode the weight codes in ``code_dtype`` for low-precision matrix multiplication."""
-        return decompress(self.weight.to(device=device, dtype=self.code_dtype), self._decode_config)
+        return decompress(self._container().to(device=device, dtype=self.code_dtype), self._decode_config)
+
+    def _scale(self, device: torch.device) -> torch.Tensor:
+        return self.quant_scale.to(device=device, dtype=self.state_buffer_dtypes["quant_scale"])
 
     def dequantize(self, device: str | torch.device | None = None) -> torch.Tensor:
         """Reconstruct dense weights in the dtype used to initialize the layer."""
         codes = self.codes(device)
-        return (codes.float() * self.quant_scale.to(codes.device).unsqueeze(1)).to(self._init_dtype)
+        return (codes.float() * self._scale(codes.device).unsqueeze(1)).to(self._init_dtype)
 
     def _require_8bit_gemm(self, device: torch.device) -> None:
         if device.type != "cuda":
@@ -331,7 +351,7 @@ class QuantizedLinear(CompressedLinear):
         flat = x.reshape(-1, x.shape[-1])
         activation, scale = self._quantize_activation(flat.detach())
         codes = self.codes(x.device)
-        weight_scale = self.quant_scale.to(codes.device)
+        weight_scale = self._scale(codes.device)
         tokens = activation.shape[0]
         rows, outs, cols = self._gemm_shapes(tokens)
         padded_activation = pad(pad(activation, 0, rows), 1, cols)
