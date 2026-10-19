@@ -12,7 +12,7 @@ _INT8_GEMM_CONFIGS = [
     triton.Config({'BLOCK_M': 128, 'BLOCK_N': 128, 'BLOCK_K': 64, 'GROUP_M': 8}, num_warps=8, num_stages=3),
 ]
 
-@triton.autotune(configs=_INT8_GEMM_CONFIGS, key=['M', 'N', 'K'])
+@triton.autotune(configs=_INT8_GEMM_CONFIGS, key=['M', 'N', 'K'], cache_results=True)
 @triton.jit
 def _int8_gemm_kernel(
     A, B, A_SCALE, B_SCALE, BIAS, C, M, N, K, stride_am, stride_bn,
