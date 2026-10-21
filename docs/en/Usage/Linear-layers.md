@@ -103,6 +103,30 @@ Use `CompressedFP8Linear` in the same pattern for FP8, on supported hardware.
 To inspect the weights, `codes()` returns their FP8 or INT8 values, and `dequantize()`
 returns their floating-point values after dequantization.
 
+### Int8_convrot
+
+`CompressedINT8Linear` supports ConvRot, a group-wise Hadamard rotation applied to weights
+during compression and to activations at inference. It preserves the linear operation and
+usually improves INT8 accuracy at a small inference cost.
+
+Enable it when creating the layer:
+
+```python
+layer = ep.CompressedINT8Linear.from_linear(
+    linear,
+    config=ep.EntroPackLossyConfig(target_bpp=4.0),
+    use_convrot=True,
+)
+```
+
+`use_convrot` is off by default. The optional `convrot_groupsize` argument (default `256`)
+controls the rotation block size; it must be a power of four and is reduced automatically if
+it does not divide `in_features`. ConvRot is available on `CompressedINT8Linear` only.
+
+If you save a quantized model and load it later, pass the same `use_convrot` and
+`convrot_groupsize` values you used when creating it. These are runtime settings and are not
+recorded in `state_dict`.
+
 ## Measure storage
 
 `stored_nbytes` reports the compressed weight size, including metadata and FP8 or INT8 quantization scales.

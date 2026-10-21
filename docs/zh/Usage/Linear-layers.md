@@ -99,6 +99,28 @@ print(output.shape, layer.container_dtype, f"{layer.compressed_bits:.2f} bits pe
 在支持的硬件上，FP8 可以按同样方式使用 `CompressedFP8Linear`。
 需要查看权重时，`codes()` 返回 FP8 或 INT8 数值，`dequantize()` 返回反量化后的浮点数值。
 
+### Int8_convrot
+
+`CompressedINT8Linear` 支持 ConvRot：压缩时对权重做分组 Hadamard 旋转，推理时对激活做同样的旋转。
+它保持线性运算不变，通常能提升 INT8 精度，代价是少量推理开销。
+
+创建层时打开开关：
+
+```python
+layer = ep.CompressedINT8Linear.from_linear(
+    linear,
+    config=ep.EntroPackLossyConfig(target_bpp=4.0),
+    use_convrot=True,
+)
+```
+
+`use_convrot` 默认关闭。可选的 `convrot_groupsize`（默认 `256`）用于设置旋转分组大小，必须是 4 的幂；
+如果不能整除 `in_features`，会自动缩小分组。该功能只适用于 `CompressedINT8Linear`。
+启用后通常能降低量化误差，不增加权重存储，只会带来少量推理计算开销。
+
+保存并重新加载量化模型时，请传入与创建时相同的 `use_convrot` 和 `convrot_groupsize`。
+这两个是运行时设置，不会记录在 `state_dict` 中。
+
 ## 统计存储
 
 `stored_nbytes` 统计压缩权重的总字节数，包含元数据及 FP8、INT8 的量化尺度。

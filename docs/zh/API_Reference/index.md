@@ -132,6 +132,13 @@ CompressedLinear.from_linear(linear, **kwargs) -> CompressedLinear
 | `CompressedFP8Linear` | FP8 E4M3FN | SM8.9 及以上 |
 | `CompressedINT8Linear` | INT8 | SM8.0 及以上 |
 
+`CompressedINT8Linear` 还接受以下关键字参数：
+
+| 参数 | 默认值 | 含义 |
+| --- | --- | --- |
+| `use_convrot` | `False` | 量化前旋转权重，量化前旋转激活 |
+| `convrot_groupsize` | `256` | 请求的旋转分组大小，须为 4 的幂；不能整除 `in_features` 时按 4 的倍数逐级缩小 |
+
 量化码格式由层类决定，构造参数 `dtype` 不改变 FP8 或 INT8 格式。
 
 `config=None` 时直接保存量化码。指定 `EntroPackLossyConfig` 时进一步进行有损压缩，
