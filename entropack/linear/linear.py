@@ -8,6 +8,7 @@ from torch.nn import functional as F
 from ..compression import CompressedTensor, compress, decompress
 from ..registry import default_config as _default_config, get_scheme, name_for_config, require_dtype
 from ..schemes import EntroPackLossyConfig, RawConfig
+from .convrot import build_convrot_matrix, choose_convrot_group, rotate_activation, rotate_weight
 from .utils import capability_of, load_quant_kernels, pad, round_up
 
 _EPS = torch.finfo(torch.float32).eps
@@ -296,9 +297,13 @@ class QuantizedLinear(CompressedLinear):
     def compress_weight(self, weight: torch.Tensor) -> None:
         """Quantize the source weight, compress its codes, and store the row scales."""
         self._check_weight_shape(weight.shape)
-        codes, scale = self._quantize_rows(weight.detach())
+        source = self._prepare_weight_source(weight.detach())
+        codes, scale = self._quantize_rows(source)
         self.weight = torch.nn.Parameter(self._compress_tensor(codes), requires_grad=False)
         self.weight_quant_scale = scale
+
+    def _prepare_weight_source(self, weight: torch.Tensor) -> torch.Tensor:
+        return weight
 
     def codes(self, device: str | torch.device | None = None) -> torch.Tensor:
         """Decode the weight codes in ``code_dtype`` for low-precision matrix multiplication."""
@@ -310,7 +315,11 @@ class QuantizedLinear(CompressedLinear):
     def dequantize(self, device: str | torch.device | None = None) -> torch.Tensor:
         """Reconstruct dense weights in the dtype used to initialize the layer."""
         codes = self.codes(device)
-        return (codes.float() * self._scale(codes.device).unsqueeze(1)).to(self._init_dtype)
+        weight = codes.float() * self._scale(codes.device).unsqueeze(1)
+        return self._restore_weight_basis(weight).to(self._init_dtype)
+
+    def _restore_weight_basis(self, weight: torch.Tensor) -> torch.Tensor:
+        return weight
 
     def _require_8bit_gemm(self, device: torch.device) -> None:
         if device.type != "cuda":
@@ -332,6 +341,9 @@ class QuantizedLinear(CompressedLinear):
             return self._quantize_rows(flat)
         return kernels.quantize_rows(flat, self.code_dtype, self.code_max, self.rounds_to_integer)
 
+    def _prepare_activation(self, flat: torch.Tensor) -> torch.Tensor:
+        return flat
+
     def _gemm_shapes(self, tokens: int) -> tuple[int, int, int]:
         return (max(tokens, self.min_tokens), round_up(self.out_features, self.code_alignment), round_up(self.in_features, self.code_alignment))
 
@@ -349,6 +361,7 @@ class QuantizedLinear(CompressedLinear):
 
     def _forward8(self, x: torch.Tensor) -> torch.Tensor:
         flat = x.reshape(-1, x.shape[-1])
+        flat = self._prepare_activation(flat)
         activation, scale = self._quantize_activation(flat.detach())
         codes = self.codes(x.device)
         weight_scale = self._scale(codes.device)
@@ -412,7 +425,15 @@ class CompressedINT8Linear(QuantizedLinear):
     available and ``torch._int_mm`` otherwise. With no compression configuration,
     quantized codes are stored directly. :class:`~entropack.EntroPackLossyConfig` additionally compresses
     them at targets from 0.001 up to, but excluding, 8 bits per parameter. Stored size also
-    includes metadata and per-row weight scales.
+    includes metadata and per-row weight scales. The remaining arguments are documented
+    on :class:`CompressedLinear`.
+
+    Args:
+        use_convrot: rotate weights before quantization and activations before they are
+            quantized. The flag is not stored in the checkpoint. Defaults to ``False``.
+        convrot_groupsize: requested power-of-four block size for the rotation. When
+            ``use_convrot`` is true, it is reduced by factors of four until it divides
+            ``in_features``; if none applies, construction fails. Defaults to 256.
     """
 
     code_dtype = torch.int8
@@ -421,6 +442,40 @@ class CompressedINT8Linear(QuantizedLinear):
     code_alignment = 8
     min_tokens = 17
     min_capability = (8, 0)
+
+    def __init__(
+        self, in_features: int, out_features: int, bias: bool = True, *, config=None,
+        device: str | torch.device | None = None, dtype: torch.dtype = torch.bfloat16,
+        use_convrot: bool = False, convrot_groupsize: int = 256,
+    ):
+        self.use_convrot = bool(use_convrot)
+        self._convrot_group = choose_convrot_group(in_features, convrot_groupsize) if self.use_convrot else None
+        if self.use_convrot and self._convrot_group is None:
+            raise ValueError(
+                f"use_convrot requires in_features {in_features} to contain a power-of-four group; "
+                f"got convrot_groupsize={convrot_groupsize}"
+            )
+        super().__init__(in_features, out_features, bias=bias, config=config, device=device, dtype=dtype)
+
+    def _convrot_matrix(self, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
+        return build_convrot_matrix(self._convrot_group, device=device, dtype=dtype)
+
+    def _prepare_activation(self, flat: torch.Tensor) -> torch.Tensor:
+        if not self.use_convrot:
+            return flat
+        return rotate_activation(flat, self._convrot_matrix(flat.device, flat.dtype), self._convrot_group)
+
+    def _prepare_weight_source(self, weight: torch.Tensor) -> torch.Tensor:
+        if not self.use_convrot:
+            return weight
+        return rotate_weight(weight, self._convrot_matrix(weight.device, weight.dtype), self._convrot_group)
+
+    def _restore_weight_basis(self, weight: torch.Tensor) -> torch.Tensor:
+        if not self.use_convrot:
+            return weight
+        return rotate_weight(
+            weight, self._convrot_matrix(weight.device, weight.dtype), self._convrot_group, inverse=True
+        )
 
     def _gemm_shapes(self, tokens):
         if load_quant_kernels() is not None:

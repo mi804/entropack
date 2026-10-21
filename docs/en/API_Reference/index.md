@@ -148,6 +148,13 @@ dtype and device.
 | `CompressedFP8Linear` | FP8 E4M3FN | SM8.9 or later |
 | `CompressedINT8Linear` | INT8 | SM8.0 or later |
 
+`CompressedINT8Linear` also accepts these keyword arguments:
+
+| Argument | Default | Meaning |
+| --- | --- | --- |
+| `use_convrot` | `False` | Rotate weights before quantization and activations before quantization |
+| `convrot_groupsize` | `256` | Requested power-of-four rotation block size; reduced by factors of four until it divides `in_features` |
+
 The layer class determines the code format. The constructor's `dtype` argument does not change
 the FP8 or INT8 format.
 
