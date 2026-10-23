@@ -3,7 +3,7 @@ import torch
 
 def probe() -> str | None:
     if not torch.cuda.is_available():
-        return "torch.cuda.is_available() is False (no NVIDIA device / driver)"
+        return "torch.cuda.is_available() is False (no CUDA device / driver)"
     try:
         import cupy
     except ImportError as e:
